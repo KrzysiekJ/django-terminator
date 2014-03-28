@@ -55,12 +55,26 @@ class Message(models.Model):
             raise NotExecuted()
 
 
+class EncryptedMessage(Message):
+    encryption_method = models.CharField(max_length=20)
+
+
+class ProxiedMessage(Message):
+    class Meta:
+        proxy = True
+
+
 class MessageFactory(factory.DjangoModelFactory):
     FACTORY_FOR = Message
     sender_email = factory.Sequence(lambda n: 'sender_{}@example.com'.format(n))
     recipient_email = factory.Sequence(lambda n: 'recipient_{}@example.com'.format(n))
     subject = factory.Sequence(lambda n: 'Subject no. {}'.format(n))
     body = factory.Sequence(lambda n: 'Body no. {}'.format(n))
+
+
+class EncryptedMessageFactory(MessageFactory):
+    FACTORY_FOR = EncryptedMessage
+    encryption_method = 'my secret cipher'
 
 
 class BirthdayGift(models.Model):
@@ -172,3 +186,23 @@ class TerminatorTestCase(TestCase):
         self.assertRaises(AttributeError, getattr, Message, 'instance_only_attribute')
 
         terminate()
+
+    def test_methods_are_not_executed_multiple_times_because_of_child_classes(self):
+        message = EncryptedMessageFactory()
+        terminate()
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_methods_present_in_multiple_models_are_executed_on_the_root_one(self):
+        # Content types are ordered by name by default, so to have a good test we want
+        # to have models with names both lexicographically greater and lesser than
+        # our root model.
+        message_models = {Message, EncryptedMessage, ProxiedMessage}
+        self.assertEqual(len(message_models), 3)
+        self.assertEqual(sorted(message_models, key=lambda model: model.__name__).index(Message), 1)
+
+        EncryptedMessageFactory()
+        terminate()
+
+        self.assertEqual(MethodExecution.objects.count(), 1)
+        execution = MethodExecution.objects.get()
+        self.assertEqual(execution.content_type.model_class(), Message)
