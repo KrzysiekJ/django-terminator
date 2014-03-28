@@ -12,7 +12,10 @@ from .models import MethodExecution
 def get_methods_executed_once(model):
     methods = []
     for attribute_name in dir(model):
-        attribute = getattr(model, attribute_name)
+        try:
+            attribute = getattr(model, attribute_name)
+        except AttributeError:
+            attribute = None
         if getattr(attribute, '_execute_once', False):
             methods.append(attribute)
     return methods

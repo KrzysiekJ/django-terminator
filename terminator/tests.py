@@ -16,6 +16,14 @@ import factory
 from . import execute_once, terminate, MethodExecution, NotExecuted
 
 
+class InstanceOnlyDescriptor(object):
+    def __get__(self, instance=None, owner=None):
+        if instance is None:
+            raise AttributeError('You must access this attribute from a class instance.')
+        else:
+            return 'foo'
+
+
 class Message(models.Model):
     sent_via_email = models.BooleanField(default=False)
     sent_via_snail_mail = models.BooleanField(default=False)
@@ -24,6 +32,8 @@ class Message(models.Model):
     recipient_prefers_snail_mail = models.BooleanField(default=False)
     subject = models.CharField(max_length=128)
     body = models.TextField()
+
+    instance_only_attribute = InstanceOnlyDescriptor()
 
     @execute_once(Q(recipient_prefers_snail_mail=False))
     def send_via_email(self):
@@ -156,3 +166,9 @@ class TerminatorTestCase(TestCase):
 
         gift_from_past = BirthdayGift.objects.get(pk=gift_from_past.pk)
         self.assertTrue(gift_from_past.sent)
+
+    def test_attribute_errors_are_ignored_when_examining_model_attributes(self):
+        Message().instance_only_attribute
+        self.assertRaises(AttributeError, getattr, Message, 'instance_only_attribute')
+
+        terminate()
